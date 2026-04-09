@@ -1,17 +1,18 @@
 from util_defs import *
 from ctx import announced_peers
 
-REQUIRED_FIELDS = [
-    'user-id',
-    'access-link',
-    'public-key'
-]
+REQUIRED_FIELDS = {
+    'user-id':str,
+    'access-link':str,
+    'public-key':str
+}
 
-OPTIONAL_FIELDS = [
-    'visible',
-    'announce-duration'
-]
+OPTIONAL_FIELDS = {
+    'visible':bool,
+    'announce-duration':int
+}
 
+ALL_FIELDS = REQUIRED_FIELDS | OPTIONAL_FIELDS
 
 DEFAULT_CONTACT = {}
 
@@ -24,4 +25,3 @@ def is_request_valid(req):
     return True
 
 
-def add_peer

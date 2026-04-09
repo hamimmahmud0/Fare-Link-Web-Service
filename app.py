@@ -1,11 +1,19 @@
-from flask import Flask, jsonify, request, abort
+from flask import Flask, jsonify, request, abort, g
 from util_defs import *
 from endpoints_util import announce_utils
-
+import sqlite3
 import time
+from db import *
+from ctx import *
 
 app = Flask(__name__)
 
+
+@app.teardown_appcontext
+def close_db(exception=None):
+    db = g.pop("db", None)
+    if db is not None:
+        db.close()
 
 
 
@@ -42,4 +50,7 @@ def handle_json(e):
 
 if __name__ == '__main__':
     # '0.0.0.0' makes the service accessible on your local network
+
+    init_db()
+
     app.run(host='0.0.0.0', port=5000)

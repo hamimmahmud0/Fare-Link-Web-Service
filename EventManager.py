@@ -1,6 +1,6 @@
 from blinker import Namespace
 from endpoints_util import announce_utils
-
+from db import *
 # Create a namespace for your app's events
 event_manager = Namespace()
 announced = event_manager.signal('announced')
@@ -18,6 +18,7 @@ def handle_new_announce(sender, **kwargs):
             contact[key] = kwargs.get(key)
 
     # add it to database
+    add_contact(contact)
     # broadcast to all connected service
 
     
