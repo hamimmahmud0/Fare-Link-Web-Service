@@ -77,6 +77,18 @@ def parse_json_to_query_string(data, ALL_FIELDS = contact_utils.ALL_FIELDS):
     print(f'parse_json_to_query_string: {query_str}')
     return query_str
 
+def get_conflict_str(fields, conflict):
+    conflict_str = ''
+
+    for key in fields:
+        if key == conflict:
+            continue
+        sql_key = parse_field_name(key)
+        conflict_str += f'{sql_key} = excluded.{sql_key}, '
+    
+    return conflict_str[:-2]
+
+
 
 def create_table(name, fields, exists=True):
     if_not_exists = ' IF NOT EXISTS'
@@ -89,11 +101,24 @@ def create_table(name, fields, exists=True):
     db.execute(f'CREATE TABLE{if_not_exists} {name} (timestamp INTAGER PRIMARY KEY, {fields_string})')
     db.commit()
 
-def insert_into_table(name, fields):
+
+def create_unique_index(table_name, field_name):
+    db = get_db()
+    sql_field_name = parse_field_name(field_name)
+    index_name = f'{table_name}_{sql_field_name}_unique_idx'
+    db.execute(
+        f'CREATE UNIQUE INDEX IF NOT EXISTS {index_name} ON {table_name} ({sql_field_name})'
+    )
+    db.commit()
+
+def insert_into_table(name, fields,conflict=None):
     db = get_db()
     columns = parse_sql_key(fields)
-    cmd = f'INSERT INTO {name} (timestamp, {columns}) VALUES ({time.time_ns()}, {parse_json_to_query_string(fields)})'
-    print(f'executing command: {cmd}')
+    conflict_str = ''
+    if conflict:
+        conflict_str = f' ON CONFLICT({parse_field_name(conflict)}) DO UPDATE SET {get_conflict_str(fields, conflict)}'
+    cmd = f'INSERT INTO {name} (timestamp, {columns}) VALUES ({time.time_ns()}, {parse_json_to_query_string(fields)}){conflict_str}'
+    print(f'DB:insert_into_table: executing command: {cmd}')
     db.execute(cmd)
     db.commit()
 
@@ -108,11 +133,12 @@ def select_from_table(name, constraints,ALL_FIELDS=contact_utils.ALL_FIELDS):
     conds=conds[:-4]
     db = get_db()
     cmd = f'SELECT * FROM {name} WHERE {conds}'
-    print(f'DB: Executing {cmd}')
+    print(f'DB:select_from_table: executing command{cmd}')
     rows = db.execute(cmd).fetchall()
     return {'data':[dict(row) for row in rows]}
 
-
+def update_in_table(name,fields,constraints):
+    pass
     
 
 # initialize
@@ -121,13 +147,14 @@ def init_db():
     db = get_db()
     # create a table announcement list
     create_table(CONTACT_TABLE_NAME,contact_utils.ALL_FIELDS)
+    create_unique_index(CONTACT_TABLE_NAME, 'user-id')
     
 
 
 # contact handlers
 def add_contact(contact):
     db = get_db()
-    insert_into_table(CONTACT_TABLE_NAME,contact)
+    insert_into_table(CONTACT_TABLE_NAME,contact,conflict='user-id')
     db.commit()
     
 def search_contact(user_id):
