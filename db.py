@@ -77,6 +77,28 @@ def parse_json_to_query_string(data, ALL_FIELDS = contact_utils.ALL_FIELDS):
     print(f'parse_json_to_query_string: {query_str}')
     return query_str
 
+
+def build_condition_string(constraints, ALL_FIELDS=contact_utils.ALL_FIELDS):
+    conds = ''
+    for key in constraints:
+        key_compitable = parse_field_name(key)
+        if ALL_FIELDS[key] == str:
+            conds += f'{key_compitable} = "{constraints[key]}" AND '
+        else:
+            conds += f'{key_compitable} = {constraints[key]} AND '
+    return conds[:-5]
+
+
+def build_update_string(fields, ALL_FIELDS=contact_utils.ALL_FIELDS):
+    update_str = ''
+    for key in fields:
+        key_compitable = parse_field_name(key)
+        if ALL_FIELDS[key] == str:
+            update_str += f'{key_compitable} = "{fields[key]}", '
+        else:
+            update_str += f'{key_compitable} = {fields[key]}, '
+    return update_str[:-2]
+
 def get_conflict_str(fields, conflict):
     conflict_str = ''
 
@@ -122,24 +144,52 @@ def insert_into_table(name, fields,conflict=None):
     db.execute(cmd)
     db.commit()
 
-def select_from_table(name, constraints,ALL_FIELDS=contact_utils.ALL_FIELDS):
-    conds = ''
-    for key in constraints:
-        key_compitable = parse_field_name(key)
-        if ALL_FIELDS[key] == str:
-            conds += f'{key_compitable} = "{constraints[key]}" AND'
-        else:
-            conds += f'{key_compitable} = {constraints[key]} AND'
-    conds=conds[:-4]
+def select_from_table(
+    name,
+    constraints,
+    ALL_FIELDS=contact_utils.ALL_FIELDS,
+    limit=None,
+    offset=None,
+    order_by=None,
+    order='ASC'
+):
+    conds = build_condition_string(constraints, ALL_FIELDS=ALL_FIELDS)
     db = get_db()
     cmd = f'SELECT * FROM {name} WHERE {conds}'
+
+    if order_by is not None:
+        cmd += f' ORDER BY {parse_field_name(order_by)} {order}'
+
+    if limit is not None:
+        cmd += f' LIMIT {limit}'
+
+    if offset is not None:
+        cmd += f' OFFSET {offset}'
+
     print(f'DB:select_from_table: executing command{cmd}')
     rows = db.execute(cmd).fetchall()
     return {'data':[dict(row) for row in rows]}
 
-def update_in_table(name,fields,constraints):
-    pass
+def update_in_table(name,fields,constraints, ALL_FIELDS=contact_utils.ALL_FIELDS):
+    db = get_db()
+    update_str = build_update_string(fields, ALL_FIELDS=ALL_FIELDS)
+    conds = build_condition_string(constraints, ALL_FIELDS=ALL_FIELDS)
+    cmd = f'UPDATE {name} SET {update_str} WHERE {conds}'
+    print(f'DB:update_in_table: executing command: {cmd}')
+    cursor = db.execute(cmd)
+    db.commit()
+    return cursor.rowcount
     
+def delete_in_table(name,constraints=None, ALL_FIELDS=contact_utils.ALL_FIELDS, condition_str=None):
+    db = get_db()
+    conds = condition_str
+    if conds is None:
+        conds = build_condition_string(constraints, ALL_FIELDS=ALL_FIELDS)
+    cmd = f'DELETE FROM {name} WHERE {conds}'
+    print(f'DB:delete_in_table: executing command: {cmd}')
+    cursor = db.execute(cmd)
+    db.commit()
+    return cursor.rowcount
 
 # initialize
 
@@ -162,10 +212,22 @@ def search_contact(user_id):
         'user-id':user_id
     })
 
-def get_visible_contacts():
-    return select_from_table(CONTACT_TABLE_NAME, {
-        'visible':True
-    })
-    pass
+def get_visible_contacts(page = 1, limit = 50):
+    offset = (page - 1) * limit
+    return select_from_table(
+        CONTACT_TABLE_NAME,
+        {
+            'visible':True
+        },
+        limit=limit,
+        offset=offset,
+        order_by='timestamp',
+        order='DESC'
+    )
 
+def remove_expired_contacts():
+    # remove all contacts where entry.timestamp + entry.expire * 60 * 10^6 < current_timestamp_in_ns
+    current_timestamp = time.time_ns()
+    condition_str = f'timestamp + (expire * 1000000000) < {current_timestamp}'
+    return delete_in_table(CONTACT_TABLE_NAME, condition_str=condition_str)
 # connected web service handlers
