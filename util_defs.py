@@ -1,4 +1,6 @@
 # Basic Responses
+import time
+
 RESPONSE_OK = {
     'status':'success'
 }
@@ -14,3 +16,7 @@ def parse_form_args(req):
     return parsed
 
 
+def TIME():
+    return {
+        'timestamp':time.time_ns()
+    }

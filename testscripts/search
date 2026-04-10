@@ -1,0 +1,3 @@
+#!/bin/bash
+
+curl -X GET http://localhost:8000/contacts/search -d "user-id=hamim"
